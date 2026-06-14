@@ -8,6 +8,13 @@ app = Flask(__name__)
 # ================== إعدادات البوت ==================
 BOT_TOKEN = "8559348024:AAEjicYYRDPdSw58PrIC5MG_Qu49lYPOkbA"
 
+# ================== قائمة الأدمن ==================
+ADMINS = [
+    355449817,  # أنت - @kingiraq
+    133438395,  # صديقك
+]
+
+# قنوات الاشتراك الإجباري
 REQUIRED_CHANNELS = [
     "@thezelma1",
     "@thezelma3", 
@@ -18,6 +25,9 @@ REQUIRED_CHANNELS = [
 PROTECTED_LINK = "https://t.me/theze1m"
 
 # ================== دوال مساعدة ==================
+def is_admin(user_id):
+    return user_id in ADMINS
+
 def check_subscription(user_id):
     for channel in REQUIRED_CHANNELS:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/getChatMember"
@@ -57,7 +67,7 @@ def edit_message(chat_id, message_id, text, keyboard=None):
 def handle_start(chat_id, user_id):
     if check_subscription(user_id):
         keyboard = [[{"text": "🚀 فتح قناة التطبيقات", "url": PROTECTED_LINK}]]
-        send_message(chat_id, "✅ أنت مشترك في جميع القنوات!\n\nاضغط الزر أدناه:", keyboard)
+        send_message(chat_id, "✅ أنت مشترك!\n\nاضغط الزر:", keyboard)
     else:
         keyboard = []
         for ch in REQUIRED_CHANNELS:
@@ -82,8 +92,20 @@ def webhook():
     
     if "message" in update:
         msg = update["message"]
-        if "text" in msg and msg["text"] == "/start":
-            handle_start(msg["chat"]["id"], msg["from"]["id"])
+        chat_id = msg["chat"]["id"]
+        user_id = msg["from"]["id"]
+        
+        if "text" in msg:
+            text = msg["text"]
+            
+            if text == "/start":
+                handle_start(chat_id, user_id)
+            
+            elif text == "/admin":
+                if is_admin(user_id):
+                    send_message(chat_id, "✨ مرحباً أيها الأدمن! البوت تحت سيطرتك.")
+                else:
+                    send_message(chat_id, "⛔ هذا الأمر مخصص للأدمن فقط.")
     
     elif "callback_query" in update:
         cb = update["callback_query"]

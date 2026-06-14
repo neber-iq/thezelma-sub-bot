@@ -10,10 +10,10 @@ app = Flask(__name__)
 BOT_TOKEN = "8559348024:AAEjicYYRDPdSw58PrIC5MG_Qu49lYPOkbA"
 
 # ================== قائمة الأدمن ==================
-# طلع معرفك من @userinfobot وحطه هنا
+# أنت وصديقك
 ADMINS = [
-    355449817,  # حط معرفك أنت هنا
-    # 133438395,  # حط معرف صديقك هنا
+    355449817,  # أنت - @kingiraq
+    133438395,  # صديقك
 ]
 
 # ================== قاعدة بيانات مؤقتة ==================
@@ -156,8 +156,6 @@ def add_channel_mode(chat_id, message_id, user_id):
         return
     
     edit_message(chat_id, message_id, "➕ **إضافة قناة جديدة**\n\nأرسل اسم القناة (مثال: @newchannel)")
-    
-    # مؤقت لحفظ الحالة (نسخة مبسطة)
     waiting_for.add(f"addchannel_{chat_id}")
 
 def rem_channel_mode(chat_id, message_id, user_id):

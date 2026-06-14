@@ -6,21 +6,16 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-# ================== إعدادات البوت ==================
 BOT_TOKEN = "8559348024:AAEjicYYRDPdSw58PrIC5MG_Qu49lYPOkbA"
 
-# ================== قائمة الأدمن ==================
-# أنت وصديقك
 ADMINS = [
-    355449817,  # أنت - @kingiraq
+    355449817,  # أنت
     133438395,  # صديقك
 ]
 
-# ================== قاعدة بيانات مؤقتة ==================
-users = []  # قائمة المعرفات اللي استخدموا البوت
-blocked = []  # قائمة المعرفات المحظورة
+users = []
+blocked = []
 
-# قنوات الاشتراك الإجباري
 REQUIRED_CHANNELS = [
     "@thezelma1",
     "@thezelma3", 
@@ -80,14 +75,11 @@ def check_subscription(user_id):
             return False
     return True
 
-# ================== أوامر البوت ==================
 def handle_start(chat_id, user_id):
     add_user(user_id)
-    
     if is_blocked(user_id):
         send_message(chat_id, "⛔ تم حظرك من هذا البوت.")
         return
-    
     if check_subscription(user_id):
         keyboard = [[{"text": "🚀 فتح الرابط", "url": PROTECTED_LINK}]]
         send_message(chat_id, "✅ أنت مشترك! اضغط الزر:", keyboard)
@@ -106,7 +98,7 @@ def handle_check(chat_id, message_id, user_id):
     else:
         edit_message(chat_id, message_id, "❌ لم تكتمل الاشتراكات. جرب مرة ثانية.")
 
-# ================== أدوات الأدمن ==================
+# ================== لوحة تحكم الأدمن بأزرار ==================
 def admin_panel(chat_id, user_id):
     if not is_admin(user_id):
         send_message(chat_id, "⛔ للأدمن فقط")
@@ -120,7 +112,7 @@ def admin_panel(chat_id, user_id):
         [{"text": "📨 إعلان", "callback_data": "broad"}],
         [{"text": "🚫 حظر مستخدم", "callback_data": "block_user"}],
         [{"text": "✅ إلغاء حظر", "callback_data": "unblock_user"}],
-        [{"text": "📋 المستخدمين", "callback_data": "list_users"}],
+        [{"text": "📋 قائمة المستخدمين", "callback_data": "list_users"}],
         [{"text": "❌ إغلاق", "callback_data": "close"}]
     ]
     send_message(chat_id, "🔧 **لوحة تحكم الأدمن**\nاختر أحد الخيارات:", keyboard)
@@ -128,7 +120,6 @@ def admin_panel(chat_id, user_id):
 def show_stats(chat_id, message_id, user_id):
     if not is_admin(user_id):
         return
-    
     text = f"""📊 **إحصائيات البوت**
 
 👥 المستخدمين: {get_user_count()}
@@ -138,93 +129,76 @@ def show_stats(chat_id, message_id, user_id):
 
 ✅ الحالة: شغال
 🕐 الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M')}"""
-    
     edit_message(chat_id, message_id, text)
 
 def show_channels(chat_id, message_id, user_id):
     if not is_admin(user_id):
         return
-    
     text = "📢 **قنوات الاشتراك:**\n\n"
     for i, ch in enumerate(REQUIRED_CHANNELS, 1):
         text += f"{i}. {ch}\n"
-    
     edit_message(chat_id, message_id, text)
+
+waiting_for = set()
 
 def add_channel_mode(chat_id, message_id, user_id):
     if not is_admin(user_id):
         return
-    
-    edit_message(chat_id, message_id, "➕ **إضافة قناة جديدة**\n\nأرسل اسم القناة (مثال: @newchannel)")
+    edit_message(chat_id, message_id, "➕ أرسل اسم القناة (مثال: @newchannel)")
     waiting_for.add(f"addchannel_{chat_id}")
 
 def rem_channel_mode(chat_id, message_id, user_id):
     if not is_admin(user_id):
         return
-    
-    edit_message(chat_id, message_id, "➖ **حذف قناة**\n\nأرسل اسم القناة (مثال: @oldchannel)")
+    edit_message(chat_id, message_id, "➖ أرسل اسم القناة للحذف (مثال: @oldchannel)")
     waiting_for.add(f"remchannel_{chat_id}")
 
 def broadcast_mode(chat_id, message_id, user_id):
     if not is_admin(user_id):
         return
-    
-    edit_message(chat_id, message_id, "📨 **إرسال إعلان**\n\nأرسل الرسالة التي تريد إرسالها للجميع:")
+    edit_message(chat_id, message_id, "📨 أرسل الرسالة التي تريد إرسالها للجميع:")
     waiting_for.add(f"broadcast_{chat_id}")
 
 def block_user_mode(chat_id, message_id, user_id):
     if not is_admin(user_id):
         return
-    
-    edit_message(chat_id, message_id, "🚫 **حظر مستخدم**\n\nأرسل معرف المستخدم (ID):")
+    edit_message(chat_id, message_id, "🚫 أرسل معرف المستخدم (ID):")
     waiting_for.add(f"block_{chat_id}")
 
 def unblock_user_mode(chat_id, message_id, user_id):
     if not is_admin(user_id):
         return
-    
-    edit_message(chat_id, message_id, "✅ **إلغاء حظر**\n\nأرسل معرف المستخدم (ID):")
+    edit_message(chat_id, message_id, "✅ أرسل معرف المستخدم (ID):")
     waiting_for.add(f"unblock_{chat_id}")
 
 def list_users(chat_id, message_id, user_id):
     if not is_admin(user_id):
         return
-    
     if not users:
         edit_message(chat_id, message_id, "📋 لا يوجد مستخدمين بعد.")
         return
-    
     text = "📋 **قائمة المستخدمين:**\n\n"
     for i, uid in enumerate(users, 1):
         text += f"{i}. `{uid}`\n"
-    
     edit_message(chat_id, message_id, text)
 
-# ================== متغيرات مؤقتة ==================
-waiting_for = set()
-
-# ================== Webhook ==================
 @app.route('/webhook', methods=['POST'])
 def webhook():
     update = request.get_json()
     if not update:
         return "OK", 200
     
-    # معالجة الرسائل
     if "message" in update:
         msg = update["message"]
         chat_id = msg["chat"]["id"]
         user_id = msg["from"]["id"]
         text = msg.get("text", "")
         
-        # أوامر البوت العامة
         if text == "/start":
             handle_start(chat_id, user_id)
-        
         elif text == "/admin":
             admin_panel(chat_id, user_id)
         
-        # معالجة المدخلات للأدمن
         for task in list(waiting_for):
             if task == f"addchannel_{chat_id}":
                 waiting_for.remove(task)
@@ -233,7 +207,6 @@ def webhook():
                     send_message(chat_id, f"✅ تم إضافة {text}")
                 else:
                     send_message(chat_id, "⚠️ يجب أن يبدأ اسم القناة بـ @")
-            
             elif task == f"remchannel_{chat_id}":
                 waiting_for.remove(task)
                 if text in REQUIRED_CHANNELS:
@@ -241,7 +214,6 @@ def webhook():
                     send_message(chat_id, f"✅ تم حذف {text}")
                 else:
                     send_message(chat_id, "❌ القناة غير موجودة")
-            
             elif task == f"broadcast_{chat_id}":
                 waiting_for.remove(task)
                 success = 0
@@ -252,7 +224,6 @@ def webhook():
                     except:
                         pass
                 send_message(chat_id, f"✅ تم الإرسال إلى {success} مستخدم")
-            
             elif task == f"block_{chat_id}":
                 waiting_for.remove(task)
                 try:
@@ -266,7 +237,6 @@ def webhook():
                         send_message(chat_id, f"✅ تم حظر {target}")
                 except:
                     send_message(chat_id, "⚠️ معرف غير صالح")
-            
             elif task == f"unblock_{chat_id}":
                 waiting_for.remove(task)
                 try:
@@ -279,7 +249,6 @@ def webhook():
                 except:
                     send_message(chat_id, "⚠️ معرف غير صالح")
     
-    # معالجة الأزرار
     elif "callback_query" in update:
         cb = update["callback_query"]
         chat_id = cb["message"]["chat"]["id"]
@@ -290,10 +259,8 @@ def webhook():
                       data={"callback_query_id": cb["id"]})
         
         data = cb["data"]
-        
         if data == "check":
             handle_check(chat_id, message_id, user_id)
-        
         elif data == "stats":
             show_stats(chat_id, message_id, user_id)
         elif data == "channels":

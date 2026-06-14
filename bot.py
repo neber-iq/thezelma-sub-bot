@@ -10,10 +10,15 @@ app = Flask(__name__)
 BOT_TOKEN = "8559348024:AAEjicYYRDPdSw58PrIC5MG_Qu49lYPOkbA"
 
 # ================== قائمة الأدمن ==================
+# طلع معرفك من @userinfobot وحطه هنا
 ADMINS = [
-    355449817,  # أنت - @kingiraq
-    133438395,  # صديقك
+    355449817,  # حط معرفك أنت هنا
+    # 133438395,  # حط معرف صديقك هنا
 ]
+
+# ================== قاعدة بيانات مؤقتة ==================
+users = []  # قائمة المعرفات اللي استخدموا البوت
+blocked = []  # قائمة المعرفات المحظورة
 
 # قنوات الاشتراك الإجباري
 REQUIRED_CHANNELS = [
@@ -25,38 +30,41 @@ REQUIRED_CHANNELS = [
 
 PROTECTED_LINK = "https://t.me/theze1m"
 
-# ================== قاعدة بيانات مؤقتة ==================
-# هذي راح تتنحذف إذا أعاد البوت التشغيل
-# للمشاريع الكبيرة تحتاج قاعدة بيانات حقيقية
-users_db = {}  # {user_id: {"joined_date": "2024-01-01", "username": "..."}}
-blocked_users = []
-
-# ================== دوال مساعدة ==================
+# ================== دوال رئيسية ==================
 def is_admin(user_id):
     return user_id in ADMINS
 
 def is_blocked(user_id):
-    return user_id in blocked_users
+    return user_id in blocked
 
-def save_user(user_id, username=None):
-    """حفظ مستخدم جديد"""
-    if user_id not in users_db:
-        users_db[user_id] = {
-            "joined_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "username": username
-        }
-        return True
-    return False
+def add_user(user_id):
+    if user_id not in users:
+        users.append(user_id)
 
 def get_user_count():
-    """عدد المستخدمين"""
-    return len(users_db)
+    return len(users)
+
+def send_message(chat_id, text, keyboard=None):
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    data = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
+    if keyboard:
+        data["reply_markup"] = json.dumps({"inline_keyboard": keyboard})
+    try:
+        requests.post(url, data=data, timeout=10)
+    except:
+        pass
+
+def edit_message(chat_id, message_id, text, keyboard=None):
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/editMessageText"
+    data = {"chat_id": chat_id, "message_id": message_id, "text": text}
+    if keyboard:
+        data["reply_markup"] = json.dumps({"inline_keyboard": keyboard})
+    try:
+        requests.post(url, json=data)
+    except:
+        pass
 
 def check_subscription(user_id):
-    """التحقق من اشتراك المستخدم في جميع القنوات"""
-    if is_blocked(user_id):
-        return False
-    
     for channel in REQUIRED_CHANNELS:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/getChatMember"
         params = {"chat_id": channel, "user_id": user_id}
@@ -72,203 +80,130 @@ def check_subscription(user_id):
             return False
     return True
 
-def send_message(chat_id, text, keyboard=None):
-    """إرسال رسالة للمستخدم"""
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    data = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
-    if keyboard:
-        data["reply_markup"] = json.dumps({"inline_keyboard": keyboard})
-    try:
-        requests.post(url, data=data, timeout=10)
-    except:
-        pass
-
-def edit_message(chat_id, message_id, text, keyboard=None):
-    """تعديل رسالة موجودة"""
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/editMessageText"
-    data = {"chat_id": chat_id, "message_id": message_id, "text": text}
-    if keyboard:
-        data["reply_markup"] = json.dumps({"inline_keyboard": keyboard})
-    try:
-        requests.post(url, json=data)
-    except:
-        pass
-
-def broadcast_to_all(message_text):
-    """إرسال رسالة لجميع المستخدمين"""
-    success_count = 0
-    fail_count = 0
-    
-    for user_id in users_db.keys():
-        try:
-            send_message(user_id, message_text)
-            success_count += 1
-        except:
-            fail_count += 1
-    
-    return success_count, fail_count
-
-def get_stats():
-    """إحصائيات البوت"""
-    stats = f"""📊 <b>إحصائيات البوت</b>
-
-👥 <b>المستخدمين:</b> {get_user_count()}
-🚫 <b>المحظورين:</b> {len(blocked_users)}
-👑 <b>الأدمن:</b> {len(ADMINS)}
-📢 <b>قنوات الاشتراك:</b> {len(REQUIRED_CHANNELS)}
-
-✅ <b>الحالة:</b> شغال
-🕐 <b>آخر تحديث:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-"""
-    return stats
-
-def get_channels_list():
-    """قائمة القنوات"""
-    channels = "<b>📢 قنوات الاشتراك الإجباري:</b>\n\n"
-    for i, ch in enumerate(REQUIRED_CHANNELS, 1):
-        channels += f"{i}. {ch}\n"
-    return channels
-
-# ================== معالجة الأوامر ==================
-def handle_start(chat_id, user_id, username=None):
-    """معالجة أمر /start"""
-    save_user(user_id, username)
+# ================== أوامر البوت ==================
+def handle_start(chat_id, user_id):
+    add_user(user_id)
     
     if is_blocked(user_id):
-        send_message(chat_id, "⛔ تم حظرك من استخدام هذا البوت. للاستفسار تواصل مع الأدمن.")
+        send_message(chat_id, "⛔ تم حظرك من هذا البوت.")
         return
     
     if check_subscription(user_id):
-        keyboard = [[{"text": "🚀 فتح قناة التطبيقات", "url": PROTECTED_LINK}]]
-        send_message(chat_id, "✅ أنت مشترك في جميع القنوات!\n\nاضغط الزر أدناه:", keyboard)
+        keyboard = [[{"text": "🚀 فتح الرابط", "url": PROTECTED_LINK}]]
+        send_message(chat_id, "✅ أنت مشترك! اضغط الزر:", keyboard)
     else:
         keyboard = []
         for ch in REQUIRED_CHANNELS:
             ch_name = ch.replace("@", "")
-            keyboard.append([{"text": f"📢 اشترك في {ch}", "url": f"https://t.me/{ch_name}"}])
-        keyboard.append([{"text": "🔍 تأكد من الاشتراك", "callback_data": "check"}])
-        send_message(chat_id, "⚠️ للوصول إلى المحتوى المحمي، يجب عليك الاشتراك في القنوات التالية:\n\nبعد الاشتراك، اضغط على زر التأكيد.", keyboard)
+            keyboard.append([{"text": f"📢 اشترك بـ {ch}", "url": f"https://t.me/{ch_name}"}])
+        keyboard.append([{"text": "✅ تأكد", "callback_data": "check"}])
+        send_message(chat_id, "⚠️ اشترك بالقنوات ثم اضغط تأكد:", keyboard)
 
-def handle_callback(chat_id, message_id, user_id):
-    """معالجة الضغط على زر التأكيد"""
-    if is_blocked(user_id):
-        edit_message(chat_id, message_id, "⛔ حسابك محظور من استخدام البوت.")
-        return
-    
+def handle_check(chat_id, message_id, user_id):
     if check_subscription(user_id):
-        keyboard = [[{"text": "🚀 فتح", "url": PROTECTED_LINK}]]
-        edit_message(chat_id, message_id, "🎉 تم التأكيد! أنت الآن مشترك.\n\nاضغط الزر أدناه:", keyboard)
+        keyboard = [[{"text": "🚀 فتح الرابط", "url": PROTECTED_LINK}]]
+        edit_message(chat_id, message_id, "🎉 تم! اضغط الزر:", keyboard)
     else:
-        edit_message(chat_id, message_id, "❌ لم تكتمل الاشتراكات بعد.\n\nيرجى الاشتراك في جميع القنوات ثم الضغط على زر التأكيد مجدداً.")
+        edit_message(chat_id, message_id, "❌ لم تكتمل الاشتراكات. جرب مرة ثانية.")
 
-# ================== أوامر الأدمن ==================
-def handle_stats(chat_id, user_id):
-    """إرسال الإحصائيات"""
+# ================== أدوات الأدمن ==================
+def admin_panel(chat_id, user_id):
     if not is_admin(user_id):
-        send_message(chat_id, "⛔ هذا الأمر مخصص للأدمن فقط.")
+        send_message(chat_id, "⛔ للأدمن فقط")
         return
-    stats = get_stats()
-    send_message(chat_id, stats)
+    
+    keyboard = [
+        [{"text": "📊 الإحصائيات", "callback_data": "stats"}],
+        [{"text": "📢 قنوات الاشتراك", "callback_data": "channels"}],
+        [{"text": "➕ إضافة قناة", "callback_data": "add_ch"}],
+        [{"text": "➖ حذف قناة", "callback_data": "rem_ch"}],
+        [{"text": "📨 إعلان", "callback_data": "broad"}],
+        [{"text": "🚫 حظر مستخدم", "callback_data": "block_user"}],
+        [{"text": "✅ إلغاء حظر", "callback_data": "unblock_user"}],
+        [{"text": "📋 المستخدمين", "callback_data": "list_users"}],
+        [{"text": "❌ إغلاق", "callback_data": "close"}]
+    ]
+    send_message(chat_id, "🔧 **لوحة تحكم الأدمن**\nاختر أحد الخيارات:", keyboard)
 
-def handle_broadcast(chat_id, user_id, message):
-    """إرسال رسالة لجميع المستخدمين"""
+def show_stats(chat_id, message_id, user_id):
     if not is_admin(user_id):
-        send_message(chat_id, "⛔ هذا الأمر مخصص للأدمن فقط.")
         return
     
-    if not message:
-        send_message(chat_id, "⚠️ يجب كتابة رسالة بعد الأمر.\nمثال: `/broadcast مرحبا جميعاً`")
-        return
-    
-    send_message(chat_id, "⏳ جاري إرسال الرسالة إلى جميع المستخدمين...")
-    success, fail = broadcast_to_all(message)
-    send_message(chat_id, f"✅ تم الإرسال بنجاح إلى {success} مستخدم.\n❌ فشل الإرسال إلى {fail} مستخدم.")
+    text = f"""📊 **إحصائيات البوت**
 
-def handle_block(chat_id, user_id, target_id):
-    """حظر مستخدم"""
-    if not is_admin(user_id):
-        send_message(chat_id, "⛔ هذا الأمر مخصص للأدمن فقط.")
-        return
-    
-    try:
-        target_id = int(target_id)
-    except:
-        send_message(chat_id, "⚠️ يجب كتابة معرف المستخدم.\nمثال: `/block 123456789`")
-        return
-    
-    if target_id in ADMINS:
-        send_message(chat_id, "⛔ لا يمكن حظر أدمن.")
-        return
-    
-    if target_id not in blocked_users:
-        blocked_users.append(target_id)
-        send_message(chat_id, f"✅ تم حظر المستخدم `{target_id}`.")
-    else:
-        send_message(chat_id, f"ℹ️ المستخدم `{target_id}` محظور بالفعل.")
+👥 المستخدمين: {get_user_count()}
+🚫 المحظورين: {len(blocked)}
+👑 الأدمن: {len(ADMINS)}
+📢 قنوات الاشتراك: {len(REQUIRED_CHANNELS)}
 
-def handle_unblock(chat_id, user_id, target_id):
-    """إلغاء حظر مستخدم"""
-    if not is_admin(user_id):
-        send_message(chat_id, "⛔ هذا الأمر مخصص للأدمن فقط.")
-        return
+✅ الحالة: شغال
+🕐 الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M')}"""
     
-    try:
-        target_id = int(target_id)
-    except:
-        send_message(chat_id, "⚠️ يجب كتابة معرف المستخدم.\nمثال: `/unblock 123456789`")
-        return
-    
-    if target_id in blocked_users:
-        blocked_users.remove(target_id)
-        send_message(chat_id, f"✅ تم إلغاء حظر المستخدم `{target_id}`.")
-    else:
-        send_message(chat_id, f"ℹ️ المستخدم `{target_id}` غير محظور.")
+    edit_message(chat_id, message_id, text)
 
-def handle_channels(chat_id, user_id):
-    """عرض قنوات الاشتراك"""
+def show_channels(chat_id, message_id, user_id):
     if not is_admin(user_id):
-        send_message(chat_id, "⛔ هذا الأمر مخصص للأدمن فقط.")
         return
-    channels = get_channels_list()
-    send_message(chat_id, channels)
+    
+    text = "📢 **قنوات الاشتراك:**\n\n"
+    for i, ch in enumerate(REQUIRED_CHANNELS, 1):
+        text += f"{i}. {ch}\n"
+    
+    edit_message(chat_id, message_id, text)
 
-def handle_addchannel(chat_id, user_id, channel):
-    """إضافة قناة جديدة"""
+def add_channel_mode(chat_id, message_id, user_id):
     if not is_admin(user_id):
-        send_message(chat_id, "⛔ هذا الأمر مخصص للأدمن فقط.")
         return
     
-    if not channel:
-        send_message(chat_id, "⚠️ يجب كتابة اسم القناة.\nمثال: `/addchannel @newchannel`")
-        return
+    edit_message(chat_id, message_id, "➕ **إضافة قناة جديدة**\n\nأرسل اسم القناة (مثال: @newchannel)")
     
-    if not channel.startswith("@"):
-        channel = "@" + channel
-    
-    if channel in REQUIRED_CHANNELS:
-        send_message(chat_id, f"ℹ️ القناة {channel} موجودة بالفعل.")
-    else:
-        REQUIRED_CHANNELS.append(channel)
-        send_message(chat_id, f"✅ تم إضافة القناة {channel}.")
+    # مؤقت لحفظ الحالة (نسخة مبسطة)
+    waiting_for.add(f"addchannel_{chat_id}")
 
-def handle_removechannel(chat_id, user_id, channel):
-    """حذف قناة"""
+def rem_channel_mode(chat_id, message_id, user_id):
     if not is_admin(user_id):
-        send_message(chat_id, "⛔ هذا الأمر مخصص للأدمن فقط.")
         return
     
-    if not channel:
-        send_message(chat_id, "⚠️ يجب كتابة اسم القناة.\nمثال: `/removechannel @channel`")
+    edit_message(chat_id, message_id, "➖ **حذف قناة**\n\nأرسل اسم القناة (مثال: @oldchannel)")
+    waiting_for.add(f"remchannel_{chat_id}")
+
+def broadcast_mode(chat_id, message_id, user_id):
+    if not is_admin(user_id):
         return
     
-    if not channel.startswith("@"):
-        channel = "@" + channel
+    edit_message(chat_id, message_id, "📨 **إرسال إعلان**\n\nأرسل الرسالة التي تريد إرسالها للجميع:")
+    waiting_for.add(f"broadcast_{chat_id}")
+
+def block_user_mode(chat_id, message_id, user_id):
+    if not is_admin(user_id):
+        return
     
-    if channel in REQUIRED_CHANNELS:
-        REQUIRED_CHANNELS.remove(channel)
-        send_message(chat_id, f"✅ تم حذف القناة {channel}.")
-    else:
-        send_message(chat_id, f"ℹ️ القناة {channel} غير موجودة.")
+    edit_message(chat_id, message_id, "🚫 **حظر مستخدم**\n\nأرسل معرف المستخدم (ID):")
+    waiting_for.add(f"block_{chat_id}")
+
+def unblock_user_mode(chat_id, message_id, user_id):
+    if not is_admin(user_id):
+        return
+    
+    edit_message(chat_id, message_id, "✅ **إلغاء حظر**\n\nأرسل معرف المستخدم (ID):")
+    waiting_for.add(f"unblock_{chat_id}")
+
+def list_users(chat_id, message_id, user_id):
+    if not is_admin(user_id):
+        return
+    
+    if not users:
+        edit_message(chat_id, message_id, "📋 لا يوجد مستخدمين بعد.")
+        return
+    
+    text = "📋 **قائمة المستخدمين:**\n\n"
+    for i, uid in enumerate(users, 1):
+        text += f"{i}. `{uid}`\n"
+    
+    edit_message(chat_id, message_id, text)
+
+# ================== متغيرات مؤقتة ==================
+waiting_for = set()
 
 # ================== Webhook ==================
 @app.route('/webhook', methods=['POST'])
@@ -282,56 +217,69 @@ def webhook():
         msg = update["message"]
         chat_id = msg["chat"]["id"]
         user_id = msg["from"]["id"]
-        username = msg["from"].get("username", "لا يوجد")
+        text = msg.get("text", "")
         
-        if "text" in msg:
-            text = msg["text"]
-            
-            if text == "/start":
-                handle_start(chat_id, user_id, username)
-            
-            elif text == "/admin":
-                if is_admin(user_id):
-                    keyboard = [
-                        [{"text": "📊 إحصائيات", "callback_data": "stats"}],
-                        [{"text": "📢 قنوات الاشتراك", "callback_data": "channels"}],
-                        [{"text": "❌ إغلاق", "callback_data": "close"}]
-                    ]
-                    send_message(chat_id, "✨ <b>لوحة تحكم الأدمن</b>\nاختر أحد الخيارات:", keyboard)
+        # أوامر البوت العامة
+        if text == "/start":
+            handle_start(chat_id, user_id)
+        
+        elif text == "/admin":
+            admin_panel(chat_id, user_id)
+        
+        # معالجة المدخلات للأدمن
+        for task in list(waiting_for):
+            if task == f"addchannel_{chat_id}":
+                waiting_for.remove(task)
+                if text.startswith("@"):
+                    REQUIRED_CHANNELS.append(text)
+                    send_message(chat_id, f"✅ تم إضافة {text}")
                 else:
-                    send_message(chat_id, "⛔ هذا الأمر مخصص للأدمن فقط.")
+                    send_message(chat_id, "⚠️ يجب أن يبدأ اسم القناة بـ @")
             
-            # أوامر الأدمن النصية
-            elif text.startswith("/stats"):
-                handle_stats(chat_id, user_id)
+            elif task == f"remchannel_{chat_id}":
+                waiting_for.remove(task)
+                if text in REQUIRED_CHANNELS:
+                    REQUIRED_CHANNELS.remove(text)
+                    send_message(chat_id, f"✅ تم حذف {text}")
+                else:
+                    send_message(chat_id, "❌ القناة غير موجودة")
             
-            elif text.startswith("/broadcast"):
-                msg_parts = text.split(" ", 1)
-                broadcast_msg = msg_parts[1] if len(msg_parts) > 1 else ""
-                handle_broadcast(chat_id, user_id, broadcast_msg)
+            elif task == f"broadcast_{chat_id}":
+                waiting_for.remove(task)
+                success = 0
+                for uid in users:
+                    try:
+                        send_message(uid, f"📢 **إعلان من الأدمن**\n\n{text}")
+                        success += 1
+                    except:
+                        pass
+                send_message(chat_id, f"✅ تم الإرسال إلى {success} مستخدم")
             
-            elif text.startswith("/block"):
-                msg_parts = text.split(" ")
-                target = msg_parts[1] if len(msg_parts) > 1 else ""
-                handle_block(chat_id, user_id, target)
+            elif task == f"block_{chat_id}":
+                waiting_for.remove(task)
+                try:
+                    target = int(text)
+                    if target in ADMINS:
+                        send_message(chat_id, "⛔ لا يمكن حظر أدمن")
+                    elif target in blocked:
+                        send_message(chat_id, "ℹ️ المستخدم محظور بالفعل")
+                    else:
+                        blocked.append(target)
+                        send_message(chat_id, f"✅ تم حظر {target}")
+                except:
+                    send_message(chat_id, "⚠️ معرف غير صالح")
             
-            elif text.startswith("/unblock"):
-                msg_parts = text.split(" ")
-                target = msg_parts[1] if len(msg_parts) > 1 else ""
-                handle_unblock(chat_id, user_id, target)
-            
-            elif text == "/channels":
-                handle_channels(chat_id, user_id)
-            
-            elif text.startswith("/addchannel"):
-                msg_parts = text.split(" ", 1)
-                channel = msg_parts[1] if len(msg_parts) > 1 else ""
-                handle_addchannel(chat_id, user_id, channel)
-            
-            elif text.startswith("/removechannel"):
-                msg_parts = text.split(" ", 1)
-                channel = msg_parts[1] if len(msg_parts) > 1 else ""
-                handle_removechannel(chat_id, user_id, channel)
+            elif task == f"unblock_{chat_id}":
+                waiting_for.remove(task)
+                try:
+                    target = int(text)
+                    if target in blocked:
+                        blocked.remove(target)
+                        send_message(chat_id, f"✅ تم إلغاء حظر {target}")
+                    else:
+                        send_message(chat_id, "ℹ️ المستخدم غير محظور")
+                except:
+                    send_message(chat_id, "⚠️ معرف غير صالح")
     
     # معالجة الأزرار
     elif "callback_query" in update:
@@ -343,31 +291,35 @@ def webhook():
         requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery",
                       data={"callback_query_id": cb["id"]})
         
-        if cb["data"] == "check":
-            handle_callback(chat_id, message_id, user_id)
+        data = cb["data"]
         
-        elif cb["data"] == "stats":
-            if is_admin(user_id):
-                stats = get_stats()
-                edit_message(chat_id, message_id, stats)
-            else:
-                edit_message(chat_id, message_id, "⛔ غير مصرح")
+        if data == "check":
+            handle_check(chat_id, message_id, user_id)
         
-        elif cb["data"] == "channels":
-            if is_admin(user_id):
-                channels = get_channels_list()
-                edit_message(chat_id, message_id, channels)
-            else:
-                edit_message(chat_id, message_id, "⛔ غير مصرح")
-        
-        elif cb["data"] == "close":
-            edit_message(chat_id, message_id, "🔒 تم إغلاق لوحة التحكم.")
+        elif data == "stats":
+            show_stats(chat_id, message_id, user_id)
+        elif data == "channels":
+            show_channels(chat_id, message_id, user_id)
+        elif data == "add_ch":
+            add_channel_mode(chat_id, message_id, user_id)
+        elif data == "rem_ch":
+            rem_channel_mode(chat_id, message_id, user_id)
+        elif data == "broad":
+            broadcast_mode(chat_id, message_id, user_id)
+        elif data == "block_user":
+            block_user_mode(chat_id, message_id, user_id)
+        elif data == "unblock_user":
+            unblock_user_mode(chat_id, message_id, user_id)
+        elif data == "list_users":
+            list_users(chat_id, message_id, user_id)
+        elif data == "close":
+            edit_message(chat_id, message_id, "🔒 تم إغلاق اللوحة")
     
     return "OK", 200
 
 @app.route('/')
 def home():
-    return "البوت شغال يباشا! 🚀"
+    return "شغال!"
 
 application = app
 
